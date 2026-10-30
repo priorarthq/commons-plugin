@@ -9,7 +9,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, chmodSync }
 import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { scanSecrets, companyTerms, scanTerms, isPrivateHost, envFields } from "./priorart-secrets.mjs";
+import { scanSecrets, companyTerms, scanTerms, isPrivateHost, envFields, redact } from "./priorart-secrets.mjs";
 
 const PRIORART_DIR = join(homedir(), ".priorart");
 const CONFIG = join(PRIORART_DIR, "commons.json");
@@ -144,7 +144,10 @@ async function publish(args) {
       evidence: r.evidence.map((e) => e.claim).join("; "),
       sourceAgent: s.agent ?? null,
     };
-    out("PUBLIC DRAFT (from your team record — rewrite it before publishing):", JSON.stringify(draft, null, 2), "",
+    const names = await knownNames(ctx, [s.cwd]);
+    const masked = maskDraft(draft, names, terms);
+    out("PUBLIC DRAFT (from your team record, private details already masked — still rewrite it in general terms):",
+      JSON.stringify(masked.draft, null, 2), "", ...maskedLines(masked.found), "",
       ...publishRules(ctx, terms, "in this record"),
       ...(sourceSecrets.length ? [`- The record also contains (always blocked if kept): ${[...new Set(sourceSecrets.map((f) => f.kind))].join(", ")}`] : []),
       ...publishNext(ctx, "rewritten"));
@@ -172,11 +175,14 @@ async function publish(args) {
   }
   const allowed = new Set(String(args.allow ?? "").toLowerCase().split(",").map((x) => x.trim()).filter(Boolean));
   const company = scanTerms(text, terms).filter((t) => !allowed.has(t));
-  if (secrets.length || company.length) {
+  const names = (await knownNames(ctx, [draft._from?.dir])).filter((n) => !allowed.has(n.toLowerCase()));
+  const people = [...new Set(redact(text, { names }).found.filter(([kind]) => kind === "name").map(([, m]) => m))].filter((m) => !allowed.has(m.toLowerCase()));
+  if (secrets.length || company.length || people.length) {
     const lines = ["NOT PUBLISHED — the draft still contains:"];
     for (const f of secrets) lines.push(`- ${f.kind}: ${f.preview}   (always blocked)`);
     for (const t of company) lines.push(isPrivateHost(t) ? `- internal hostname: "${t}"   (always blocked)` : `- company-specific term: "${t}"   (if it's a generic public word here, re-run with --allow ${t})`);
-    out(...lines, "", "Rewrite the draft, show it to the user again, then retry.");
+    for (const n of people) lines.push(`- a person's name: "${n}"   (if it's a generic public word here, e.g. a tool's name, re-run with --allow ${n.toLowerCase()})`);
+    out(...lines, "", `Fix it with: commons.mjs mask --file ${args.file}   (replaces them with placeholders), show the user the result, then retry.`);
     process.exitCode = 1;
     return;
   }
@@ -213,7 +219,9 @@ function publishRules(ctx, terms, where) {
 
 function publishNext(ctx, kind) {
   return ["", `LICENSE: ${LICENSE_TEXT}`, "",
-    `Next: write the ${kind} JSON to a file, show it to the user verbatim, and after they approve:`,
+    `Next: write the ${kind} JSON to a file, then mask it (names, emails, hosts, addresses and the like become placeholders):`,
+    "  commons.mjs mask --file <draft.json>",
+    "Show the user the masked JSON verbatim, and after they approve:",
     `  commons.mjs publish --file <draft.json> --accept-license${ctx.commonsToken ? "" : "   (sign in first: commons.mjs login --as <public-name>)"}`];
 }
 
@@ -456,6 +464,63 @@ function saveCommonsToken(ctx, reg) {
   ctx.commonsToken = reg.token; ctx.commonsHandle = reg.handle;
 }
 
+/**
+ * People whose names mustn't end up public: the user (git name, email, handle), everyone who committed to the repo the
+ * draft came from, and the user's teammates (from the team server, when the team plugin is set up). Bots are skipped.
+ */
+async function knownNames(ctx, dirs = []) {
+  const names = new Set();
+  const add = (n) => {
+    const v = String(n ?? "").trim().replace(/^\d+\+/, "");   // GitHub noreply emails: 12345+name
+    if (v.length >= 3 && !/noreply|\[bot\]|^bot$|dependabot|github-actions|renovate/i.test(v)) names.add(v);
+  };
+  add(git(["config", "user.name"])); add(ctx.handle); add(ctx.email?.split("@")[0]); add(process.env.USER);
+  for (const d of new Set([process.cwd(), ...dirs].filter((d) => d && existsSync(d)))) {
+    for (const l of (git(["log", "-n", "500", "--format=%an%n%cn%n%ae%n%ce"], d) ?? "").split("\n")) add(l.includes("@") ? l.split("@")[0] : l);
+  }
+  if (ctx.server && ctx.token) {
+    try { for (const u of await api(ctx, "GET", "/api/users")) { add(u.handle); add(u.displayName); } } catch { /* not in a team, or offline */ }
+  }
+  return [...names];
+}
+
+/** Masks every text in a draft (fields, lists, environment keys and values); returns the masked copy and what changed. */
+function maskDraft(draft, names, terms) {
+  const found = [];
+  const m = (v) => { if (typeof v !== "string") return v; const r = redact(v, { names, terms }); found.push(...r.found); return r.text; };
+  const env = (v) => Array.isArray(v) ? v.map(env) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [m(k), env(x)])) : m(v);
+  const out = { ...draft };
+  for (const f of ["title", "problem", "solution", "evidence"]) out[f] = m(draft[f]);
+  for (const f of ["findings", "tried", "tags"]) if (Array.isArray(draft[f])) out[f] = draft[f].map(m);
+  if (draft.environment) out.environment = env(draft.environment);
+  return { draft: out, found };
+}
+
+function maskedLines(found) {
+  if (!found.length) return ["Nothing private found to mask."];
+  const seen = new Map();
+  for (const [kind, from, to] of found) seen.set(`${kind}|${from}`, `- ${kind}: "${from}" → ${to}`);
+  return [`MASKED ${seen.size} private detail${seen.size === 1 ? "" : "s"}:`, ...seen.values()];
+}
+
+/** mask --file <draft.json>: replaces private details with placeholders in place, and lists what it replaced. */
+async function mask(args) {
+  const ctx = context();
+  const file = args.file ?? args._[1];
+  if (!file || file === true) throw new Error("usage: commons.mjs mask --file <draft.json>");
+  let draft;
+  try { draft = JSON.parse(readFileSync(String(file), "utf8")); }
+  catch (e) { throw new Error(`cannot read draft ${file}: ${e.message}`); }
+  const terms = [...new Set([...localTerms(ctx), ...companyTerms({ repo: draft._from?.repo, cwd: draft._from?.dir, email: draft._from?.email })])];
+  const masked = maskDraft(draft, await knownNames(ctx, [draft._from?.dir]), terms);
+  writeFileSync(String(file), JSON.stringify(masked.draft, null, 2) + "\n");
+  out(...maskedLines(masked.found), "",
+    `Saved the masked draft to ${file}. Show the user the exact JSON. If a placeholder replaced a generic public word`,
+    "(a library or tool that shares a name with a person or the company), put the word back. Names and addresses the plugin",
+    "doesn't know (customers, other people) aren't masked: read the text for those. Then, with the user's OK:",
+    `  commons.mjs publish --file ${file} --accept-license`);
+}
+
 /** What identifies the user or their company from where the agent is running: repo remote, folder, git identity. */
 const localTerms = (ctx) => companyTerms({ repo: normalizeRemote(ctx.remote), cwd: process.cwd(), handle: ctx.handle, email: ctx.email });
 
@@ -515,14 +580,14 @@ function help() {
     "  status [--json]                              what's set up, what to do next",
     "  config --url <commons address> | --url off   where the commons is",
     '  search "<problem>" [--limit n] · get <id>    find and read public records',
-    "  publish [<team-record-id>]  →  publish --file <draft.json> --accept-license [--allow term] [--again]",
+    "  publish [<team-record-id>]  →  mask --file <draft.json>  →  publish --file <draft.json> --accept-license [--allow term] [--again]",
     "  login --as <public-name> [--mine]  →  login --finish [--as <other>]   GitHub sign-in (to publish or give feedback)",
     "  logout [--all]                               sign out here (--all: every machine)",
     '  worked <id> [--no] [--note "…"] · vote <id> up|down · flag <id> --reason "…" · unpublish <id>');
 }
 
 const args = parseArgs(process.argv.slice(2));
-const commands = { status, config, search, get, publish, login: (a) => commons({ ...a, _: ["commons", "login", ...a._.slice(1)] }),
+const commands = { status, config, search, get, publish, mask, login: (a) => commons({ ...a, _: ["commons", "login", ...a._.slice(1)] }),
   logout: (a) => commonsLogout(context(), a), worked, vote, flag, unpublish, help };
 const cmd = commands[args._[0] ?? "help"];
 if (!cmd) { console.error(`unknown command: ${args._[0]}`); help(); process.exit(2); }

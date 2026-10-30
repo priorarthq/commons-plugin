@@ -81,12 +81,18 @@ the end of a session that solved a problem other people are likely to hit.
 2. Make it general: the technology and the problem, not the company. Remove company, product, repo, host, team and
    people names, customer data and proprietary code. Fill `environment` with the public stack and versions. Put what
    was tried and didn't work into `tried`: those negative results save people the most time.
-3. Write it to a temp file and **show the user the exact JSON**. Tell them the license: CC BY 4.0, reusable by anyone,
-   including commercially and in AI training datasets. Wait for an explicit yes.
-4. `publish --file <path> --accept-license`. If it says to sign in first, do the sign-in above.
-5. NOT PUBLISHED: fix exactly what it lists and show the user again. Credentials and internal addresses are always
+3. Write it to a temp file and run `mask --file <path>`. It replaces private details with placeholders: people's names
+   it knows (the user, everyone who committed to the repo, their teammates) → `[NAME]`, emails → `[EMAIL]`, internal
+   hosts → `[HOST]`, private IPs → `[IP]`, phone numbers → `[PHONE]`, street addresses → `[ADDRESS]`, home folders →
+   `~`, company, repo and product words → `[COMPANY]`, credentials → `[SECRET]`. It lists what it replaced. If a
+   placeholder took out a generic public word (a library that shares a name with a person), put the word back. Read
+   the text for names it can't know (customers, other people) and replace those with `[NAME]` yourself.
+4. **Show the user the exact masked JSON.** Tell them the license: CC BY 4.0, reusable by anyone, including
+   commercially and in AI training datasets. Wait for an explicit yes.
+5. `publish --file <path> --accept-license`. If it says to sign in first, do the sign-in above.
+6. NOT PUBLISHED: run `mask --file <path>` again, or fix exactly what it lists, and show the user again. Credentials and internal addresses are always
    blocked; for a flagged term that's a generic public word in context, ask the user, then `--allow <term>`.
-6. If something private is noticed after publishing, `unpublish <id>` takes it down at once (copies made before can't
+7. If something private is noticed after publishing, `unpublish <id>` takes it down at once (copies made before can't
    be recalled).
 
 ## Command reference
@@ -96,6 +102,6 @@ the end of a session that solved a problem other people are likely to hit.
 | `status [--json]` | What's set up, what to do next |
 | `config --url <address>` / `--url off` | Where the commons is |
 | `search "<problem>"`, `get <id>` | Find and read public records |
-| `publish [<team-record-id>]` → `publish --file <f> --accept-license` | Publish a generalized finding |
+| `publish [<team-record-id>]` → `mask --file <f>` → `publish --file <f> --accept-license` | Publish a generalized finding, private details masked |
 | `login --as <name>` → `login --finish`, `logout [--all]` | GitHub sign-in |
 | `worked <id> [--no]`, `vote <id> up\|down`, `flag <id> --reason …`, `unpublish <id>` | Feedback, and your own records |

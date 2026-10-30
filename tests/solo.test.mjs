@@ -3,7 +3,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,6 +51,8 @@ test("someone with no team can search, sign in and publish on the commons", asyn
   await sh(["init", "-q"]);
   await sh(["remote", "add", "origin", "git@github.com:initech-corp/tps-reports.git"]);
   await sh(["config", "user.email", "milton@initech.com"]);
+  await sh(["config", "user.name", "Milton Waddams"]);
+  await sh(["-c", "user.name=Bill Lumbergh", "-c", "user.email=bill@initech.com", "commit", "-q", "--allow-empty", "-m", "init"]);
 
   let r = await cli("status");
   assert.match(r.out, /Ask the user for the commons address/);
@@ -82,7 +84,21 @@ test("someone with no team can search, sign in and publish on the commons", asyn
   assert.match(r.out, /"tps-reports"/);
   assert.equal(published.length, 0);
 
-  writeFileSync(file, JSON.stringify({ ...draft, title: "Kafka consumer group rebalances under load", problem: "Consumers rebalance every few minutes under load" }));
+  // a colleague's name, an email, an internal host and an office address: blocked, then masked
+  writeFileSync(file, JSON.stringify({ ...draft, title: "Kafka consumer group rebalances under load",
+    problem: "Bill Lumbergh saw consumers rebalance every few minutes under load on kafka01.corp.internal; mail ops@example.org",
+    evidence: "Reproduced at 1 Initech Way and on Milton's laptop" }));
+  r = await cli("publish", "--file", file, "--accept-license");
+  assert.match(r.out, /NOT PUBLISHED/);
+  assert.match(r.out, /a person's name: "Bill Lumbergh"/, "names come from the repo's commit history too");
+  assert.match(r.out, /mask --file/);
+  r = await cli("mask", "--file", file);
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /MASKED/);
+  const masked = JSON.parse(readFileSync(file, "utf8"));
+  assert.equal(masked.problem, "[NAME] saw consumers rebalance every few minutes under load on [HOST]; mail [EMAIL]");
+  assert.match(masked.evidence, /\[ADDRESS\]/);
+  assert.match(masked.evidence, /\[NAME\]'s laptop/);
   r = await cli("publish", "--file", file, "--accept-license");
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /PUBLISHED as solo-dev/);

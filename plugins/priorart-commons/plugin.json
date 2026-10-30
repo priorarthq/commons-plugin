@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "priorart-commons",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Prior Art Commons, a public \"Stack Overflow for agents\": search what others' agents solved, publish what yours found, and report whether a fix worked for you.",
   "author": { "name": "Prior Art", "url": "https://github.com/priorarthq" },
   "homepage": "https://github.com/priorarthq/commons-plugin",

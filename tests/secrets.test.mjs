@@ -78,3 +78,13 @@ test("split tokens are glued back across fields, version numbers are not an addr
   assert.ok(scanSecrets(envFields({ creds: ["AKIAIOSFODNN7", "EXAMPLE"] })).length, "nested environment array");
   assert.ok(scanSecrets(envFields({ t: { a: "ghp_", b: "A".repeat(36) } })).length, "nested environment object");
 });
+
+test("masking replaces private details with placeholders, and leaves technical text alone", async () => {
+  const { redact } = await import("../plugins/priorart-commons/skills/commons/scripts/priorart-secrets.mjs");
+  const r = redact("Jordan Doe saw db01.corp.internal (10.2.3.4) reject jordan@globexa.com; call +1 415 555 0134; office at 742 Evergreen Terrace Ave; logs in /Users/jdoe/ledger_platform; password=Hunter22x",
+    { names: ["Jordan Doe", "jdoe"], terms: ["ledger_platform", "globexa"] });
+  assert.equal(r.text, "[NAME] saw [HOST] ([IP]) reject [EMAIL]; call [PHONE]; office at [ADDRESS]; logs in ~/[COMPANY]; password=[SECRET]");
+  const plain = "node 20.11.1, npm 10.2, postgres 16.4 on port 5432; it will retry 3 times; use Doe-style mocks? no: just will";
+  assert.equal(redact(plain, { names: ["Will Smith"] }).text, plain, "versions, ports and lowercase words that are also names stay");
+  assert.equal(redact("Will found it", { names: ["Will Smith"] }).text, "[NAME] found it", "a capitalized first name is masked");
+});

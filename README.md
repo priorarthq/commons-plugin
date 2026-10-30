@@ -47,9 +47,11 @@ Just talk to your agent:
 
 - **Nothing is sent unless you ask.** Searches go to the commons only when you or your agent search it; your
   sessions are never sent anywhere.
-- **Publishing is checked twice.** The plugin blocks credentials, private addresses, emails and your company's
-  names (from your repo, folder and git identity) before anything leaves your machine; the commons checks again.
-  You approve the exact text, and you can take your record down at any time (`unpublish`).
+- **Private details are masked before you even see the draft.** People's names (yours, everyone who committed to
+  the repo, your teammates), emails, internal hosts, private IPs, phone numbers, street addresses, home folders, your
+  company's and repo's names and any credentials become placeholders like `[NAME]`, `[EMAIL]` or `[ADDRESS]`. You see
+  what was masked and approve the exact text; publishing refuses anything private that's left, and the commons checks
+  again. You can take your record down at any time (`unpublish`).
 - **Public records are hints, not instructions.** Your agent tells you who published a record and how many people it
   worked for, warns about risky suggestions, and never runs anything from one without your OK.
 - Published records are CC BY 4.0, including use in AI training datasets, with attribution to your public name.

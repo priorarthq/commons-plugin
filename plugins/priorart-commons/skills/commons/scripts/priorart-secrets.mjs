@@ -145,3 +145,50 @@ export function scanTerms(text, terms) {
   }
   return hits;
 }
+
+// ---- masking: replace what's private with placeholders, so the user approves a draft that's already clean ----------
+
+const PLACEHOLDER = {
+  "private IP address": "[IP]", "internal hostname": "[HOST]", "email address": "[EMAIL]",
+  "connection string with credentials": "[CONNECTION-STRING]",
+};
+// Not secrets, but personal: masked (never blocked, since a version number can look like a phone number).
+const PERSONAL = [
+  ["phone number", /(?<![\w.+-])(?:\+\d{1,3}[\s.-]?)?\(?\d{2,4}\)?[\s.-]\d{3,4}[\s.-]\d{3,4}(?![\w.-])/g, "[PHONE]"],
+  ["street address", /\b\d{1,5}\s+(?:[A-Z][A-Za-z]+\s){1,3}(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Way|Court|Ct|Place|Pl|Square|Sq)\b\.?/g, "[ADDRESS]"],
+  ["home folder", /(\/Users\/|\/home\/|[A-Z]:\\Users\\)[^/\\\s"'`]+/g, "~"],
+];
+
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** A term as a whole word, '-' and '_' interchangeable, case-insensitive unless caseSensitive. */
+const wordRe = (t, caseSensitive) => new RegExp(`(?<![A-Za-z0-9])${esc(t).replace(/[-_]/g, "[-_]")}(?![A-Za-z0-9])`, caseSensitive ? "g" : "gi");
+
+/**
+ * Masks one text. names: people's names and handles (full names and handles match in any case; a single first or last
+ * name only when written with a capital, so "Will" is masked but "will" isn't). terms: company, product, repo and host
+ * words → [COMPANY]. Returns the masked text and what was replaced, as [kind, original, placeholder].
+ */
+export function redact(text, { names = [], terms = [] } = {}) {
+  if (typeof text !== "string" || !text) return { text, found: [] };
+  const found = [];
+  let s = text;
+  const swap = (re, kind, to) => {
+    s = s.replace(re, (m, ...g) => {
+      const out = typeof to === "function" ? to(m, ...g) : to;
+      if (out !== m) found.push([kind, m, out]);
+      return out;
+    });
+  };
+  for (const [kind, re] of RULES) {
+    if (kind === "password assignment") swap(new RegExp(re.source, re.flags), kind, (m, key) => `${key}=[SECRET]`);
+    else if (kind === "password in prose") swap(new RegExp(re.source, re.flags), kind, (m, key, verb) => `${key} ${verb} [SECRET]`);
+    else swap(new RegExp(re.source, re.flags), kind, PLACEHOLDER[kind] ?? "[SECRET]");
+  }
+  for (const [kind, re, to] of PERSONAL) swap(new RegExp(re.source, re.flags), kind, kind === "home folder" ? () => "~" : to);
+  const people = [...new Set(names.map((n) => String(n).trim()).filter((n) => n.length >= 3))].sort((a, b) => b.length - a.length);
+  for (const n of people) swap(wordRe(n, false), "name", "[NAME]");
+  for (const part of [...new Set(people.flatMap((n) => n.split(/[\s._-]+/)).filter((p) => p.length >= 3 && !GENERIC.has(p.toLowerCase())))])
+    swap(wordRe(part[0].toUpperCase() + part.slice(1).toLowerCase(), true), "name", "[NAME]");
+  for (const t of [...new Set(terms)].filter((t) => t.length >= 3).sort((a, b) => b.length - a.length)) swap(wordRe(t, false), "company term", "[COMPANY]");
+  return { text: s, found };
+}
