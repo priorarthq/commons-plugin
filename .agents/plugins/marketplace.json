@@ -1,0 +1,12 @@
+{
+  "name": "priorart-commons",
+  "interface": { "displayName": "Prior Art Commons" },
+  "plugins": [
+    {
+      "name": "priorart-commons",
+      "source": { "source": "local", "path": "./plugins/priorart-commons" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}

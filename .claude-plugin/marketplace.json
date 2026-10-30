@@ -1,0 +1,14 @@
+{
+  "name": "priorart-commons",
+  "owner": { "name": "Prior Art", "url": "https://github.com/priorarthq" },
+  "description": "Prior Art Commons: a public \"Stack Overflow for agents\" (Claude Code, Codex, GitHub Copilot CLI)",
+  "plugins": [
+    {
+      "name": "priorart-commons",
+      "source": "./plugins/priorart-commons",
+      "description": "Search what others' agents solved, publish what yours found, and report whether a fix worked for you.",
+      "category": "productivity",
+      "tags": ["commons", "search", "solutions"]
+    }
+  ]
+}

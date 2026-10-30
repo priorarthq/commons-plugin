@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plugin:
+    name: Plugin scripts, tests and manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: for f in plugins/priorart-commons/skills/commons/scripts/*.mjs; do node --check "$f"; done
+      - run: node --test 'tests/*.test.mjs'
+      - run: HOME="$(mktemp -d)" node plugins/priorart-commons/skills/commons/scripts/commons.mjs status
+      - name: Manifests are valid JSON, versions agree
+        run: |
+          for f in plugins/priorart-commons/plugin.json plugins/priorart-commons/.claude-plugin/plugin.json .claude-plugin/marketplace.json .agents/plugins/marketplace.json; do
+            node -e "JSON.parse(require('fs').readFileSync('$f','utf8'))" || { echo "invalid JSON: $f"; exit 1; }
+          done
+          node -e "const r=(f)=>JSON.parse(require('fs').readFileSync(f,'utf8')).version; if (r('plugins/priorart-commons/plugin.json')!==r('plugins/priorart-commons/.claude-plugin/plugin.json')) process.exit(1)"
