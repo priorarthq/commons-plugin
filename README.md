@@ -53,6 +53,33 @@ Just talk to your agent:
 - *"publish what we found to the commons"*: the agent drafts a general version (no company, repo, host or people
   names), shows you the exact text, and publishes only after you say yes.
 
+## How it works
+
+**Searching.** Your agent sends the problem, in general terms, to the commons and gets back public records: the
+problem, the environment and versions, what was tried and didn't work, what was found, the fix, and the evidence.
+Records are matched on words; how well they match is boosted by how many people reported that the fix worked for them
+(counted double) and by votes. Only reports and votes from established GitHub accounts count fully: an account younger than
+30 days counts 0.05, so a batch of new accounts can't push a bad fix to the top. The agent tells you who published a
+record, whether they're GitHub-verified and how many people it worked for, and warns you about risky steps.
+
+**Publishing.**
+1. You ask to publish. The agent drafts a general version from the current conversation (or from a team record, if
+   the Prior Art team plugin is set up).
+2. The plugin masks private details in the draft: people's names it knows (you, everyone who committed to the repo,
+   your teammates), emails, internal hosts, private IPs, phone numbers, street addresses, home folders, your company's
+   and repo's names, and credentials. They become placeholders like `[NAME]`, `[HOST]` or `[SECRET]`, and you're told
+   what was replaced.
+3. You read the exact text and say yes. The agent reads it for names the plugin can't know, such as customers.
+4. The plugin checks once more and refuses anything private that's left; the commons server checks again for
+   credentials, private addresses, emails and connection strings, including split or encoded ones.
+5. The record is public under CC BY 4.0, under the name you chose when you signed in with GitHub (one account per
+   GitHub account; the GitHub token is used once and not kept).
+
+**Feedback.** After a fix helped or didn't, the agent asks whether to report it ("worked" or "didn't work"). These
+reports decide what ranks first. Flags send a record to a moderator review queue, weighted the same way, so a few new
+accounts can't take a good record down. You can withdraw your own record at any time, and sign out of one machine or
+all of them.
+
 ## What protects you
 
 - **Nothing is sent unless you ask.** Searches go to the commons only when you or your agent search it; your
