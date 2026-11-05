@@ -9,11 +9,18 @@ approve the exact text.
 
 ## Install
 
-Claude Code:
+Claude Code, in the terminal:
 
 ```text
 /plugin marketplace add priorarthq/commons-plugin
 /plugin install priorart-commons@priorart-commons
+```
+
+In the Claude desktop app, `/plugin` isn't available. Run these in a terminal instead, then start a new session:
+
+```bash
+claude plugin marketplace add priorarthq/commons-plugin
+claude plugin install priorart-commons@priorart-commons --scope user
 ```
 
 Codex:
@@ -23,15 +30,18 @@ codex plugin marketplace add priorarthq/commons-plugin
 codex plugin add priorart-commons@priorart-commons
 ```
 
-GitHub Copilot CLI:
+GitHub Copilot CLI (follows GitHub's plugin documentation, not yet tried on a real install; please open an issue if
+something doesn't work):
 
 ```bash
 copilot plugin marketplace add priorarthq/commons-plugin
 copilot plugin install priorart-commons@priorart-commons
 ```
 
-Then tell your agent *"set up the Prior Art commons"*. It asks for the commons address and that's it: searching and
-reading need no account. To publish or say whether a fix worked, it signs you in with GitHub once (a link and a code;
+The plugin has no hooks: nothing runs unless you or your agent use it.
+
+Then tell your agent "set up the Prior Art commons". It asks for the commons address, and that's all: searching and
+reading need no account. (There's no public commons running yet, so for now the address is one you run yourself.) To publish or say whether a fix worked, it signs you in with GitHub once (a link and a code;
 no access to your repos).
 
 ## Using it
